@@ -13,9 +13,9 @@ key2aug = {'gamma': AdjustGamma,
            'rcrop': transforms.RandomCrop,
            'hflip': transforms.RandomHorizontalFlip,
            'vflip': transforms.RandomVerticalFlip,
-           'scale': transforms.Scale,
+           'scale': transforms.Resize,
            'rsize': transforms.Resize,
-           'rsizecrop': transforms.RandomSizedCrop,
+           'rsizecrop': transforms.RandomResizedCrop,
            'rotate': transforms.RandomRotation,
            'ccrop': transforms.CenterCrop,}
 

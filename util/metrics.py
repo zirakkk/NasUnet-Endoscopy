@@ -12,6 +12,7 @@ class SegmentationMetric(object):
 
     def update(self, labels, preds):
         def evaluate_worker(self, label, pred):
+            label = torch.squeeze(label, dim=1)   # Mycode 
             correct, labeled = batch_pix_accuracy(
                 pred, label)
             inter, union = batch_intersection_union(
@@ -78,8 +79,8 @@ def batch_intersection_union(output, target, nclass):
     """
     predict = torch.max(output, 1)[1]
     mini = 1
-    maxi = nclass-1
-    nbins = nclass-1
+    maxi = nclass #-1
+    nbins = nclass   #-1
 
     # label is: 0, 1, 2, ..., nclass-1
     # Note: 0 is background
@@ -174,7 +175,7 @@ def dice_coefficient(input, target, smooth=1.0):
     probs = F.softmax(input, dim=1)
 
     encoded_target = probs.detach() * 0
-    encoded_target.scatter_(1, target.unsqueeze(1), 1)
+    encoded_target.scatter_(1, target.to(torch.int64), 1)
     encoded_target = encoded_target.float()
 
     num = probs * encoded_target   # b, c, h, w -- p*g

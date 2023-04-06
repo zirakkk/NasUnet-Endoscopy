@@ -1,4 +1,8 @@
 logs/
 predictions/
 *.pyc
-tools/cell_visualize/
+
+/experiment/promise_12/
+/experiment/RoboticsDataset/
+/experiment/train_tiny_data/
+

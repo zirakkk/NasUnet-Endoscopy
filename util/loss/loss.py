@@ -2,7 +2,34 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.nn.modules.loss import _WeightedLoss
-__all__ = ['SegmentationLosses']
+__all__ = ['SegmentationLosses', 'LossBinary']
+
+class LossBinary:
+    """
+    Loss defined as \alpha BCE - (1 - \alpha) SoftJaccard
+    """
+
+    def __init__(self, jaccard_weight=0):
+        self.nll_loss = nn.BCEWithLogitsLoss()
+        self.jaccard_weight = jaccard_weight
+
+    def __call__(self, outputs, targets):
+        loss = (1 - self.jaccard_weight) * self.nll_loss(outputs, targets)
+
+        if self.jaccard_weight:
+            eps = 1e-15
+            jaccard_target = (targets == 1).float()
+            jaccard_output = F.sigmoid(outputs)
+
+            intersection = (jaccard_output * jaccard_target).sum()
+            union = jaccard_output.sum() + jaccard_target.sum()
+
+            loss -= self.jaccard_weight * torch.log((intersection + eps) / (union - intersection + eps))
+        return loss
+    
+    def to(self, device):
+        self.nll_loss.to(device)
+        return self
 
 class SegmentationLosses(nn.CrossEntropyLoss):
     def __init__(self, name='dice_loss', se_loss=False,
@@ -92,7 +119,7 @@ class SegmentationLosses(nn.CrossEntropyLoss):
             probs = F.softmax(input, dim=1)
 
             encoded_target = probs.detach() * 0
-            encoded_target.scatter_(1, target.unsqueeze(1), 1)
+            encoded_target.scatter_(1, target.to(torch.int64), 1)
             encoded_target = encoded_target.float()
 
             num = probs * encoded_target  # b, c, h, w -- p*g

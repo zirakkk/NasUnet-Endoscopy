@@ -10,7 +10,7 @@ from torch.utils import data
 import torch.backends.cudnn as cudnn
 
 sys.path.append('..')
-from util.loss.loss import SegmentationLosses
+from util.loss.loss import SegmentationLosses, LossBinary
 from util.datasets import get_dataset
 from util.utils import get_logger, save_checkpoint, calc_time, store_images
 from util.utils import  average_meter, weights_init
@@ -49,7 +49,7 @@ class Network(object):
         self.args = parser.parse_args()
 
         with open(self.args.config) as fp:
-            self.cfg = yaml.load(fp)
+            self.cfg = yaml.load(fp, Loader=yaml.FullLoader)
             print('load configure file at {}'.format(self.args.config))
         self.model_name = self.args.model
         print('Usage model :{}'.format(self.model_name))
@@ -83,9 +83,11 @@ class Network(object):
         trainset = get_dataset(self.cfg['data']['dataset'], split='train', mode='train')
         valset = get_dataset(self.cfg['data']['dataset'], split='val', mode ='val')
         # testset = get_dataset(self.cfg['data']['dataset'], split='test', mode='test')
-        self.nweight = trainset.class_weight
+        self.nweight = None
+        #self.nweight = trainset.class_weight
         print('dataset weights: {}'.format(self.nweight))
-        self.n_classes = trainset.num_class
+        self.n_classes = 1
+        #self.n_classes = trainset.num_class
         self.batch_size = self.cfg['training']['batch_size']
         kwargs = {'num_workers': self.cfg['training']['n_workers'], 'pin_memory': True}
 
@@ -112,11 +114,12 @@ class Network(object):
     def _init_model(self):
 
         # Setup loss function
-        criterion = SegmentationLosses(name=self.cfg['training']['loss']['name'],
+        criterion = LossBinary(jaccard_weight=1)
+        '''criterion = SegmentationLosses(name=self.cfg['training']['loss']['name'],
                                        aux_weight = self.cfg['training']['loss']['aux_weight'],
                                        weight = self.nweight,
                                        ignore_index=-1 # ignore background
-                                       )
+                                       ) '''
         self.criterion = criterion.to(self.device)
 
         self.show_dice_coeff = False
@@ -211,6 +214,69 @@ class Network(object):
         self.scheduler = get_scheduler(self.model_optimizer, scheduler_params)
 
     def run(self):
+
+        #TEsting with New Data (Mask Generator) *******************************************************************************
+        self.dur_time = 0
+        self.start_epoch = 0
+        self.best_mIoU, self.best_loss, self.best_pixAcc, self.best_dice_coeff = 0, 1.0, 0, 0
+        # optionally resume from a checkpoint for model
+        resume = self.cfg['training']['resume'] if self.cfg['training']['resume'] is not None else None
+        if resume is not None:
+            if os.path.isfile(resume):
+                self.logger.info("Loading model and optimizer from checkpoint '{}'".format(resume))
+                checkpoint = torch.load(resume, map_location=self.device)
+                if not self.args.ft: # no fine-tuning
+                    self.start_epoch = checkpoint['epoch']
+                    self.dur_time = checkpoint['dur_time']
+                    self.best_mIoU = checkpoint[ 'best_mIoU']
+                    self.best_pixAcc = checkpoint[ 'best_pixAcc']
+                    self.best_loss = checkpoint['best_loss']
+                    self.best_dice_coeff = checkpoint['best_dice_coeff']
+                    self.model_optimizer.load_state_dict(checkpoint['model_optimizer'])
+                self.model.load_state_dict(checkpoint['model_state'])
+            else:
+                self.logger.info("No checkpoint found at '{}'".format(resume))
+        
+        
+        predset = get_dataset(self.cfg['data']['dataset'], split='pred', mode ='pred')
+        kwargs = {'num_workers': self.cfg['training']['n_workers'], 'pin_memory': True}
+        self.pred_queue = data.DataLoader(predset, batch_size=self.batch_size, drop_last=False, shuffle=False, **kwargs)
+        
+        from pathlib import Path
+
+        output_path = Path('C:\\Users\\Zirak\\Projects\\logs\\nasunet\\train\\roboticsdataset\\20230405-034028\\predicted_masks')
+        output_path.mkdir(exist_ok=True, parents=True)
+        
+        self.model.eval()
+        predict_list = []
+        tbar = tqdm(self.pred_queue)
+        problem_type = 'binary'
+        with torch.no_grad():
+            for batch_num, (inputs, paths) in enumerate(tbar):
+                inputs = inputs.cuda(self.device)
+
+                predict_list = self.model(inputs)
+
+                for i, image_name in enumerate(paths):
+                    if problem_type == 'binary':
+                        factor = 255
+                        #t_mask = (predict_list[i].data.cpu().numpy().argmax(axis=1) * factor).astype(np.uint8)
+                        t_mask = (F.sigmoid(predict_list[i][i, 0]).data.cpu().numpy() * factor).astype(np.uint8)
+
+                    h, w = t_mask.shape
+                    full_mask = np.zeros((1080, 1920))
+                    full_mask[28:28 + h, 320:320 + w] = t_mask
+
+                    instrument_folder = Path(paths[i]).parent.parent.name
+
+                    (output_path / instrument_folder).mkdir(exist_ok=True, parents=True)
+                    import cv2
+                    cv2.imwrite(str(output_path / instrument_folder / (Path(paths[i]).stem + '.png')), full_mask) 
+                
+        
+        #********************************************************************************************************
+        
+        
         self.logger.info('args = %s', self.cfg)
         # Setup Metrics
         self.metric_train = SegmentationMetric(self.n_classes)
@@ -248,7 +314,17 @@ class Network(object):
 
             if  self.show_dice_coeff:
                 self.logger.info('current best DSC {}'.format(self.best_dice_coeff))
-
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'dur_time': self.dur_time + time.time() - run_start,
+                'model_state': self.model.state_dict(),
+                'model_optimizer': self.model_optimizer.state_dict(),
+                'best_pixAcc': self.best_pixAcc,
+                'best_mIoU': self.best_mIoU,
+                'best_dice_coeff': self.best_dice_coeff,
+                'best_loss': self.best_loss,
+            }, True, self.save_path)    
+            
             if self.save_best:
                 save_checkpoint({
                     'epoch': epoch + 1,
@@ -291,7 +367,9 @@ class Network(object):
         self.writer.close()
         self.logger.info('cost time: {}'.format(calc_time(self.dur_time + time.time() - run_start)))
         self.logger.info('log dir in : {}'.format(self.save_path))
-
+        
+        
+        
 
     def train(self):
         self.model.train()
@@ -401,7 +479,7 @@ class Network(object):
 
         # Store best score
         self.best_pixAcc = pixAcc if self.best_pixAcc < pixAcc else self.best_pixAcc
-        self.best_loss = cur_loss if self.best_loss > cur_loss else self.best_loss
+        self.best_loss = cur_loss #if self.best_loss > cur_loss else self.best_loss
 
         if self.show_dice_coeff: # DSC first
             if self.best_dice_coeff < mdice_coeff:

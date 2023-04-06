@@ -11,6 +11,7 @@ from .bladder import Bladder
 from .chaos import CHAOS
 from .promise12 import Promise12
 from .camvid import  CamVid
+from .roboticsdataset import RoboticsDataset
 
 datasets = {
     'coco': COCOSegmentation,
@@ -24,7 +25,8 @@ datasets = {
     'bladder': Bladder,
     'chaos' : CHAOS,
     'promise12': Promise12,
-    'camvid': CamVid
+    'camvid': CamVid,
+    'roboticsdataset': RoboticsDataset
 }
 
 acronyms = {
@@ -40,10 +42,12 @@ acronyms = {
     'bladder': 'bladder',
     'chaos': 'chaos',
     'promise12': 'promise12',
-    'camvid': 'camvid'
+    'camvid': 'camvid',
+    'roboticsdataset': 'roboticsdataset'
 }
 
-dir = '/train_tiny_data/imgseg/'
+#dir = 'C:/Users/Zirak/Projects/NasUnet/experiment/promise_12'
+dir = 'C:/Users/Zirak/Projects/NasUnet/experiment/RoboticsDataset/cropped_train'
 #=
 #dir = '../../../training_data/imageSeg/'
 

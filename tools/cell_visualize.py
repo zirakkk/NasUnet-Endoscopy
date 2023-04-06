@@ -2,9 +2,9 @@ import sys
 import os
 import platform
 import time
-from util import visualize
+import util.visualize as v
 from util.utils import create_exp_dir
-import geno_searched
+import models.geno_searched as geno_types
 
 def main(format='svg'):
 
@@ -25,8 +25,8 @@ def main(format='svg'):
         print('{} is not specified in geno_types.py'.format(genotype_name))
         sys.exit(1)
 
-    visualize.plot(genotype.down, store_path+'/DownC', format=format)
-    visualize.plot(genotype.up, store_path+'/UpC',format=format)
+    v.plot(genotype.down, store_path+'/DownC', format=format)
+    v.plot(genotype.up, store_path+'/UpC',format=format)
 
 if __name__ == '__main__':
     # support {'jpeg', 'png', 'pdf', 'tiff', 'svg', 'bmp'

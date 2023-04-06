@@ -16,7 +16,7 @@ NAS_UNET_V1_En_sh = Genotype(down=[('down_cweight', 0), ('down_cweight', 1), ('d
 NAS_UNET_V2_En = Genotype(down=[('down_dep_conv', 0), ('down_dil_conv', 1), ('down_cweight', 0), ('down_dep_conv', 1), ('down_dep_conv', 1), ('down_dep_conv', 0)], down_concat=range(2, 5),
                           up=[('identity', 0), ('up_dep_conv', 1), ('cweight', 0), ('up_cweight', 1), ('conv', 2), ('up_cweight', 1)], up_concat=range(2, 5))
 
-NAS_UNET_V2 = Genotype(down=[('down_conv', 1), ('down_dep_conv', 0), ('down_cweight', 1), ('down_dil_conv', 0), ('down_dil_conv', 1), ('down_conv', 0)], down_concat=range(2, 5),
+NAS_UNET_V2 = Genotype(down= [('down_conv', 1), ('down_dep_conv', 0), ('down_cweight', 1), ('down_dil_conv', 0), ('down_dil_conv', 1), ('down_conv', 0)], down_concat=range(2, 5),
          up=[('identity', 0), ('up_cweight', 1), ('identity', 2), ('up_cweight', 1), ('cweight', 3), ('up_conv', 1)], up_concat=range(2, 5))
 
 
